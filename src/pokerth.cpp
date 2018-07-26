@@ -102,12 +102,17 @@ int main( int argc, char **argv )
 #ifdef ANDROID
 	QApplication a(argc, argv);
 	a.setApplicationName("PokerTH");
-#else
+#elif (QT_VERSION >= QT_VERSION_CHECK(5, 6, 0))
 	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
 	SharedTools::QtSingleApplication a( "PokerTH", argc, argv );
 	if (a.sendMessage("Wake up!")) {
 		return 0;
 	}
+#else
+        SharedTools::QtSingleApplication a( "PokerTH", argc, argv );
+        if (a.sendMessage("Wake up!")) {
+                return 0;
+        }
 #endif
 
 	//create defaultconfig

@@ -372,6 +372,7 @@ public slots:
 
 	void showShowMyCardsButton();
 	void sendShowMyCardsSignal();
+    void sendToggleRealCalc();
 
 	void closeMessageBoxes();
 	void hide();

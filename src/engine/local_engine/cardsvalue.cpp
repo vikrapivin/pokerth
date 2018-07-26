@@ -722,6 +722,758 @@ std::vector< std::vector<int> > CardsValue::calcCardsChance(GameState beRoID, in
 	return chance;
 }
 
+//calculations will probably be off from experience because I do not consider cards of players who are out
+//may decide to do that later
+std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int numberPlayers, int* boardCards, bool realState)
+{
+
+    std::string returnString = "";
+    int numberTrials = 7000;
+
+    switch(beRoID) {
+    case GAME_STATE_PREFLOP: {
+
+        //Monte Carlo simulation is probably best here, do numberTrials different draws
+        //below algorithm could be more efficient, but this is probably sufficiently efficient
+        //(on reflection: ehh, could be better) however, it adds a feature that I can process the end results of the round better
+
+        int allCards[] = {
+            0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            50, 51
+        };
+
+        int cardsSorted[2];
+        cardsSorted[0] = playerCards[0];
+        cardsSorted[1] = playerCards[1];
+
+        std::sort (cardsSorted, cardsSorted+2);
+
+        std::vector<int> allPosCards(52,-1);
+        std::vector<int>::iterator posCardsIt;
+
+        posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+2, allPosCards.begin() );
+        //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+        allPosCards.resize(posCardsIt-allPosCards.begin());
+
+        int cardsArraySubset[52];
+        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+        int boardSim[7];
+        int winCount = 0;
+
+        for (int i = 0; i < numberTrials; i++)
+        {
+
+            // use time as a seed?
+            //unsigned shuffleseed = time (NULL) % UINT_MAX;
+            //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+            //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<50; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+            //            }
+            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            boardSim[5] = cardsArraySubset[0];
+            boardSim[6] = cardsArraySubset[1];
+            boardSim[2] = cardsArraySubset[2];
+            boardSim[3] = cardsArraySubset[3];
+            boardSim[4] = cardsArraySubset[4];
+            boardSim[0] = playerCards[0];
+            boardSim[1] = playerCards[1];
+            //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<7; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(boardSim[ll]);
+            //            }
+
+            int playerCardVal = cardsValue(boardSim,0);
+
+            //simulate cards of other players
+            int otherCards[2*(numberPlayers-1)];
+            //            returnString += "j loop\n";
+            for(int j = 0; j < 2*(numberPlayers-1); j++)
+            {
+                otherCards[j] = cardsArraySubset[j+5];
+                //                returnString += "\n" + std::to_string(otherCards[j]);
+            }
+
+            bool playerWinsSim = true;
+
+            for(int j = 0; j < numberPlayers-1; j++)
+            {
+                boardSim[0] = otherCards[2*j];
+                boardSim[1] = otherCards[2*j+1];
+                if(playerCardVal < cardsValue(boardSim,0))
+                {
+                    playerWinsSim = false;
+                    break;
+                }
+            }
+            if (playerWinsSim == true)
+            {
+                winCount++;
+            }
+        }
+        double percentChance =  1.0*winCount/numberTrials*100.0;
+        double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+        returnString = returnString + "Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+    }
+        break;
+    case GAME_STATE_FLOP: {
+
+        int allCards[] = {
+            0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            50, 51
+        };
+
+        int cardsSorted[5];
+        cardsSorted[0] = playerCards[0];
+        cardsSorted[1] = playerCards[1];
+        cardsSorted[2] = boardCards[0];
+        cardsSorted[3] = boardCards[1];
+        cardsSorted[4] = boardCards[2];
+
+        std::sort (cardsSorted, cardsSorted+5);
+
+        std::vector<int> allPosCards(52,-1);
+        std::vector<int>::iterator posCardsIt;
+
+        posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+5, allPosCards.begin() );
+        //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+        allPosCards.resize(posCardsIt-allPosCards.begin());
+
+        int cardsArraySubset[52];
+        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+        int boardSim[7];
+        int winCount = 0;
+
+        //int numberTrials = 10000;
+        for (int i = 0; i < numberTrials; i++)
+        {
+
+            // use time as a seed?
+            //unsigned shuffleseed = time (NULL) % UINT_MAX;
+            //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+            //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<50; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+            //            }
+            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            boardSim[5] = cardsArraySubset[0];
+            boardSim[6] = cardsArraySubset[1];
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[0] = playerCards[0];
+            boardSim[1] = playerCards[1];
+            //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<7; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(boardSim[ll]);
+            //            }
+
+            int playerCardVal = cardsValue(boardSim,0);
+
+            //simulate cards of other players
+            int otherCards[2*(numberPlayers-1)];
+            //            returnString += "j loop\n";
+            for(int j = 0; j < 2*(numberPlayers-1); j++)
+            {
+                otherCards[j] = cardsArraySubset[j+2];
+                //                returnString += "\n" + std::to_string(otherCards[j]);
+            }
+
+            bool playerWinsSim = true;
+
+            for(int j = 0; j < numberPlayers-1; j++)
+            {
+                boardSim[0] = otherCards[2*j];
+                boardSim[1] = otherCards[2*j+1];
+                if(playerCardVal < cardsValue(boardSim,0))
+                {
+                    playerWinsSim = false;
+                    break;
+                }
+            }
+            if (playerWinsSim == true)
+            {
+                winCount++;
+            }
+        }
+        double percentChance =  1.0*winCount/numberTrials*100.0;
+        double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+        returnString = returnString + "Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+    }
+        break;
+    case GAME_STATE_TURN: {
+
+        int allCards[] = {
+            0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            50, 51
+        };
+
+        int cardsSorted[6];
+        cardsSorted[0] = playerCards[0];
+        cardsSorted[1] = playerCards[1];
+        cardsSorted[2] = boardCards[0];
+        cardsSorted[3] = boardCards[1];
+        cardsSorted[4] = boardCards[2];
+        cardsSorted[5] = boardCards[3];
+
+        std::sort (cardsSorted, cardsSorted+6);
+
+        std::vector<int> allPosCards(52,-1);
+        std::vector<int>::iterator posCardsIt;
+
+        posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+6, allPosCards.begin() );
+        //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+        allPosCards.resize(posCardsIt-allPosCards.begin());
+
+        int cardsArraySubset[52];
+        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+        int boardSim[7];
+        int winCount = 0;
+
+        //int numberTrials = 10000;
+        for (int i = 0; i < numberTrials; i++)
+        {
+
+            // use time as a seed?
+            //unsigned shuffleseed = time (NULL) % UINT_MAX;
+            //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+            //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<50; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+            //            }
+            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            boardSim[6] = cardsArraySubset[0];
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+            boardSim[0] = playerCards[0];
+            boardSim[1] = playerCards[1];
+            //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<7; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(boardSim[ll]);
+            //            }
+
+            int playerCardVal = cardsValue(boardSim,0);
+
+            //simulate cards of other players
+            int otherCards[2*(numberPlayers-1)];
+            //            returnString += "j loop\n";
+            for(int j = 0; j < 2*(numberPlayers-1); j++)
+            {
+                otherCards[j] = cardsArraySubset[j+1];
+                //                returnString += "\n" + std::to_string(otherCards[j]);
+            }
+
+            bool playerWinsSim = true;
+
+            for(int j = 0; j < numberPlayers-1; j++)
+            {
+                boardSim[0] = otherCards[2*j];
+                boardSim[1] = otherCards[2*j+1];
+                if(playerCardVal < cardsValue(boardSim,0))
+                {
+                    playerWinsSim = false;
+                    break;
+                }
+            }
+            if (playerWinsSim == true)
+            {
+                winCount++;
+            }
+        }
+        double percentChance =  1.0*winCount/numberTrials*100.0;
+        double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+        returnString = returnString + "Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+    }
+        break;
+    case GAME_STATE_RIVER: {
+
+        int allCards[] = {
+            0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+            10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+            30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+            50, 51
+        };
+
+        int cardsSorted[7];
+        cardsSorted[0] = playerCards[0];
+        cardsSorted[1] = playerCards[1];
+        cardsSorted[2] = boardCards[0];
+        cardsSorted[3] = boardCards[1];
+        cardsSorted[4] = boardCards[2];
+        cardsSorted[5] = boardCards[3];
+        cardsSorted[6] = boardCards[4];
+
+        std::sort (cardsSorted, cardsSorted+7);
+
+        std::vector<int> allPosCards(52,-1);
+        std::vector<int>::iterator posCardsIt;
+
+        posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+7, allPosCards.begin() );
+        //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+        allPosCards.resize(posCardsIt-allPosCards.begin());
+
+        int cardsArraySubset[52];
+        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+        int boardSim[7];
+        int winCount = 0;
+
+        //int numberTrials = 10000;
+        for (int i = 0; i < numberTrials; i++)
+        {
+
+            // use time as a seed?
+            //unsigned shuffleseed = time (NULL) % UINT_MAX;
+            //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+            //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<50; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+            //            }
+            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+            boardSim[6] = boardCards[4];
+            boardSim[0] = playerCards[0];
+            boardSim[1] = playerCards[1];
+            //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+            //            for (int ll = 0; ll<7; ll++)
+            //            {
+            //                returnString += "\n" + std::to_string(boardSim[ll]);
+            //            }
+
+            int playerCardVal = cardsValue(boardSim,0);
+
+            //simulate cards of other players
+            int otherCards[2*(numberPlayers-1)];
+            //            returnString += "j loop\n";
+            for(int j = 0; j < 2*(numberPlayers-1); j++)
+            {
+                otherCards[j] = cardsArraySubset[j+0];
+                //                returnString += "\n" + std::to_string(otherCards[j]);
+            }
+
+            bool playerWinsSim = true;
+
+            for(int j = 0; j < numberPlayers-1; j++)
+            {
+                boardSim[0] = otherCards[2*j];
+                boardSim[1] = otherCards[2*j+1];
+                if(playerCardVal < cardsValue(boardSim,0))
+                {
+                    playerWinsSim = false;
+                    break;
+                }
+            }
+            if (playerWinsSim == true)
+            {
+                winCount++;
+            }
+        }
+        double percentChance =  1.0*winCount/numberTrials*100.0;
+        double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+        returnString = returnString + "Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+    }
+        break;
+    default: {
+    }
+    }
+
+    if (realState == true)
+    {
+        switch(beRoID) {
+        case GAME_STATE_PREFLOP: {
+
+            //Monte Carlo simulation is probably best here, do 1000 different draws
+            //below algorithm could be more efficient, but this is probably sufficiently efficient
+
+            int allCards[] = {
+                0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                50, 51
+            };
+
+            int cardsSorted[2*numberPlayers];
+            for(int i =0; i< numberPlayers; i++)
+            {
+                cardsSorted[2*i ] = playerCards[2*i];
+                cardsSorted[2*i + 1] = playerCards[2*i + 1];
+            }
+
+            std::sort (cardsSorted, cardsSorted+(2*numberPlayers));
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+2, allPosCards.begin() );
+            //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int cardsArraySubset[52];
+            memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+            int boardSim[7];
+            int winCount = 0;
+
+            //int numberTrials = 10000;
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                // use time as a seed?
+                //unsigned shuffleseed = time (NULL) % UINT_MAX;
+                //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+                //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<50; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+                //            }
+                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                boardSim[5] = cardsArraySubset[0];
+                boardSim[6] = cardsArraySubset[1];
+                boardSim[2] = cardsArraySubset[2];
+                boardSim[3] = cardsArraySubset[3];
+                boardSim[4] = cardsArraySubset[4];
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+                //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<7; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(boardSim[ll]);
+                //            }
+
+                int playerCardVal = cardsValue(boardSim,0);
+
+                bool playerWinsSim = true;
+
+                // cards of other players
+                for(int j = 1; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*j];
+                    boardSim[1] = playerCards[2*j+1];
+                    if(playerCardVal < cardsValue(boardSim,0))
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                }
+            }
+            double percentChance =  1.0*winCount/numberTrials*100.0;
+            double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+            returnString = returnString + "\nReal Chance of Winning (real): " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+        }
+            break;
+        case GAME_STATE_FLOP: {
+
+            int allCards[] = {
+                0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                50, 51
+            };
+
+            int cardsSorted[5];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+
+            std::sort (cardsSorted, cardsSorted+5);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+5, allPosCards.begin() );
+            //posCardsIt=std::set_difference (allCards, allCards+52, cardsSorted, cardsSorted+2, allPosCards.begin());
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int cardsArraySubset[52];
+            memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+            int boardSim[7];
+            int winCount = 0;
+
+            //int numberTrials = 10000;
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                // use time as a seed?
+                //unsigned shuffleseed = time (NULL) % UINT_MAX;
+                //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+                //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<50; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+                //            }
+                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                boardSim[5] = cardsArraySubset[0];
+                boardSim[6] = cardsArraySubset[1];
+                boardSim[2] = boardCards[0];
+                boardSim[3] = boardCards[1];
+                boardSim[4] = boardCards[2];
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+                //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<7; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(boardSim[ll]);
+                //            }
+
+                int playerCardVal = cardsValue(boardSim,0);
+
+                bool playerWinsSim = true;
+
+                // cards of other players
+                for(int j = 1; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*j];
+                    boardSim[1] = playerCards[2*j+1];
+                    if(playerCardVal < cardsValue(boardSim,0))
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                }
+            }
+            double percentChance =  1.0*winCount/numberTrials*100.0;
+            double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+            returnString = returnString + "\nReal Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+        }
+            break;
+        case GAME_STATE_TURN: {
+
+            int allCards[] = {
+                0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                50, 51
+            };
+
+            int cardsSorted[6];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+            cardsSorted[5] = boardCards[3];
+
+            std::sort (cardsSorted, cardsSorted+6);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+6, allPosCards.begin() );
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int cardsArraySubset[52];
+            memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+            int boardSim[7];
+            int winCount = 0;
+
+            //int numberTrials = 10000;
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                // use time as a seed?
+                //unsigned shuffleseed = time (NULL) % UINT_MAX;
+                //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+                //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<50; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+                //            }
+                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                boardSim[6] = cardsArraySubset[0];
+                boardSim[2] = boardCards[0];
+                boardSim[3] = boardCards[1];
+                boardSim[4] = boardCards[2];
+                boardSim[5] = boardCards[3];
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+                //            returnString += "2nd ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<7; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(boardSim[ll]);
+                //            }
+
+                int playerCardVal = cardsValue(boardSim,0);
+
+                bool playerWinsSim = true;
+
+                // cards of other players
+                for(int j = 1; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*j];
+                    boardSim[1] = playerCards[2*j+1];
+                    if(playerCardVal < cardsValue(boardSim,0))
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                }
+            }
+            double percentChance =  1.0*winCount/numberTrials*100.0;
+            double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+            returnString = returnString + "\nReal Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+        }
+            break;
+        case GAME_STATE_RIVER: {
+
+            int allCards[] = {
+                0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+                10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+                20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+                30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+                40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+                50, 51
+            };
+
+            int cardsSorted[7];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+            cardsSorted[5] = boardCards[3];
+            cardsSorted[6] = boardCards[4];
+
+            std::sort (cardsSorted, cardsSorted+7);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+7, allPosCards.begin() );
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int cardsArraySubset[52];
+            memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+            int boardSim[7];
+            int winCount = 0;
+
+            int numberTrials = 10000;
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                // use time as a seed?
+                //unsigned shuffleseed = time (NULL) % UINT_MAX;
+                //shuffle(allPosCards.begin(), allPosCards.end(), std::default_random_engine(shuffleseed));
+
+                //            returnString += "1st ll loop\n" + std::to_string(allPosCards.size())+"\n";
+                //            for (int ll = 0; ll<50; ll++)
+                //            {
+                //                returnString += "\n" + std::to_string(cardsArraySubset[ll]) + " + " + std::to_string(allPosCards[ll]);
+                //            }
+                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                boardSim[2] = boardCards[0];
+                boardSim[3] = boardCards[1];
+                boardSim[4] = boardCards[2];
+                boardSim[5] = boardCards[3];
+                boardSim[6] = boardCards[4];
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+
+                int playerCardVal = cardsValue(boardSim,0);
+
+                bool playerWinsSim = true;
+
+                // cards of other players
+                for(int j = 1; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*j];
+                    boardSim[1] = playerCards[2*j+1];
+                    if(playerCardVal < cardsValue(boardSim,0))
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                }
+            }
+            double percentChance =  1.0*winCount/numberTrials*100.0;
+            double stdDevChance = sqrt((1.0*winCount)/numberTrials*(1-(1.0*winCount/numberTrials))/numberTrials)*100.0;
+            returnString = returnString + "\nReal Chance of Winning: " + std::to_string(percentChance) +"%"+ "\nwith standard deviation " +std::to_string(stdDevChance);
+
+        }
+            break;
+        default: {
+        }
+        }
+    }
+
+    return returnString;
+}
+
 std::string CardsValue::determineHandName(int myCardsValueInt, PlayerList activePlayerList)
 {
 

@@ -519,7 +519,10 @@ gameTableImpl::gameTableImpl(ConfigFile *c, QMainWindow *parent)
 	lineEdit_ChatInput->installEventFilter(this);
 #endif
 
-	this->installEventFilter(this);
+    //remove the test text in the putOdds textbox
+    textEdit_putOdds->clear();
+
+    this->installEventFilter(this);
 
 	// create universal messageDialgo
 	myUniversalMessageDialog = new myMessageDialogImpl(myConfig, this);
@@ -633,7 +636,10 @@ gameTableImpl::gameTableImpl(ConfigFile *c, QMainWindow *parent)
 #endif
 
 	connect( pushButton_showMyCards, SIGNAL( clicked() ), this, SLOT( sendShowMyCardsSignal() ) );
-	for(i=0; i<=9; i++)connect( playerTipLabelArray[i], SIGNAL( linkActivated(QString) ), playerAvatarLabelArray[i], SLOT(startChangePlayerTip(QString) ) );
+
+    connect( pushButton_calc_realOdds, SIGNAL( clicked() ), this, SLOT( sendToggleRealCalc() ) );
+
+    for(i=0; i<=9; i++)connect( playerTipLabelArray[i], SIGNAL( linkActivated(QString) ), playerAvatarLabelArray[i], SLOT(startChangePlayerTip(QString) ) );
 	for(i=0; i<=9; i++) {
 		for(int j=1; j<=5; j++) {
 			connect( playerStarsArray[j][i], SIGNAL( linkActivated(QString) ), playerAvatarLabelArray[i], SLOT(setPlayerRating(QString) ) );
@@ -3510,6 +3516,10 @@ void gameTableImpl::localGameModification()
 	tabWidget_Left->removeTab(1);
 	tabWidget_Left->removeTab(1);
 	tabWidget_Left->removeTab(1);
+    tabWidget_Left->removeTab(1);
+
+    //insert Odds Tab
+    tabWidget_Left->insertTab(1, tab_odds, QString(tr("Odds")));
 #endif
 
 	int i;
@@ -4044,6 +4054,82 @@ void gameTableImpl::refreshCardsChance(GameState bero)
 #endif
 		}
 	}
+
+    textEdit_putOdds->clear();
+
+    //hook into this function to implement my chance calculator
+    boost::shared_ptr<PlayerInterface> humanPlayer = myStartWindow->getSession()->getCurrentGame()->getSeatsList()->front();
+    if(humanPlayer->getMyActiveStatus() && humanPlayer->getMyAction() != PLAYER_ACTION_FOLD) {
+
+
+        PlayerList activePlayz = myStartWindow->getSession()->getCurrentGame()->getActivePlayerList();
+        int numberOfPlayers = activePlayz->size();
+
+
+
+        //use below to compute actual number of players
+        int nPlayersStillIn = numberOfPlayers;
+
+        PlayerListConstIterator it_c;
+
+        //ehh could rewrite it to count up and not use below, but too lazy
+        int holecardIterator = 0;
+
+
+        int boardCards[5];
+        myStartWindow->getSession()->getCurrentGame()->getCurrentHand()->getBoard()->getMyCards(boardCards);
+
+        int holeCards[2*nPlayersStillIn];
+
+        for(it_c=activePlayz->begin(); it_c!=activePlayz->end(); ++it_c)
+        {
+            if((*it_c)->getMyAction() == PLAYER_ACTION_FOLD)
+            {
+                //keeping this for debug for now. Later on just iterate over below instead of holecardIterator
+                nPlayersStillIn--;
+            }
+            else
+            {
+                int * curPoint = holeCards + 2*holecardIterator;
+                (*it_c)->getMyCards(curPoint);
+                //textEdit_putOdds->appendPlainText(QString::number(*curPoint));
+                //textEdit_putOdds->appendPlainText(QString::number(*(curPoint+1)));
+                holecardIterator++;
+
+            }
+        }
+
+        if(myConfig->readConfigInt("ShowRealChance")) {
+            std::string outputString = CardsValue::calcOddsChance(bero, holeCards, nPlayersStillIn, boardCards, true);
+            QString oddsText = outputString.c_str();
+
+            textEdit_putOdds->appendPlainText(oddsText);
+        }
+        else
+        {
+            std::string outputString = CardsValue::calcOddsChance(bero, holeCards, nPlayersStillIn, boardCards, false);
+            QString oddsText = outputString.c_str();
+
+            textEdit_putOdds->appendPlainText(oddsText);
+        }
+
+
+        //below for debug
+        QString numberPlays = QString::number(myStartWindow->getSession()->getCurrentGame()->getActivePlayerList()->size());
+        //    textEdit_putOdds->appendPlainText("\n");
+        //    textEdit_putOdds->appendPlainText(QString::number(numberOfPlayers));
+        //    textEdit_putOdds->appendPlainText(QString::number(nPlayersStillIn));
+
+        //textEdit_putOdds->appendPlainText("QStringnumber(holecardIterator)");
+        //textEdit_putOdds->appendPlainText(QString::number(holecardIterator));
+
+        //implement when it is false, i.e. when button was not pressed
+    }
+    else
+    {
+        textEdit_putOdds->clear();
+        textEdit_putOdds->appendPlainText("player is out");
+    }
 }
 
 void gameTableImpl::refreshActionButtonFKeyIndicator(bool clear)
@@ -4377,6 +4463,20 @@ void gameTableImpl::sendShowMyCardsSignal()
 
 		pushButton_showMyCards->hide();
 	}
+}
+
+void gameTableImpl::sendToggleRealCalc()
+{
+    if(myConfig->readConfigInt("ShowRealChance"))
+    {
+        myConfig->writeConfigInt("ShowRealChance", 0);
+    }
+    else
+    {
+        myConfig->writeConfigInt("ShowRealChance", 1);
+    }
+
+    // once I implement the chance calculator as a separate thread this can be used to update it.
 }
 
 void gameTableImpl::closeMessageBoxes()
