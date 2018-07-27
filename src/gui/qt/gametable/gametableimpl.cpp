@@ -4089,7 +4089,6 @@ void gameTableImpl::refreshCardsChance(GameState bero)
                 //textEdit_putOdds->appendPlainText(QString::number(*curPoint));
                 //textEdit_putOdds->appendPlainText(QString::number(*(curPoint+1)));
                 nPlayersStillIn++;
-
             }
         }
 
@@ -4369,6 +4368,7 @@ void gameTableImpl::saveGameTableGeometry()
 	myConfig->writeBuffer();
 }
 
+//buggy procedure, currently fullscreen, but settings glitched then it shows full screen, but resizes
 void gameTableImpl::restoreGameTableGeometry()
 {
 	if(myConfig->readConfigInt("GameTableFullScreenSave")) {
@@ -4379,10 +4379,10 @@ void gameTableImpl::restoreGameTableGeometry()
 #endif
 	} else {
 		//resize only if style size allow this and if NOT fixed windows size
-		if(!myGameTableStyle->getIfFixedWindowSize().toInt() && myConfig->readConfigInt("GameTableHeightSave") <= myGameTableStyle->getMaximumWindowHeight().toInt() && myConfig->readConfigInt("GameTableHeightSave") >= myGameTableStyle->getMinimumWindowHeight().toInt() && myConfig->readConfigInt("GameTableWidthSave") <= myGameTableStyle->getMaximumWindowWidth().toInt() && myConfig->readConfigInt("GameTableWidthSave") >= myGameTableStyle->getMinimumWindowWidth().toInt()) {
+        if(!this->isFullScreen() && !myGameTableStyle->getIfFixedWindowSize().toInt() && myConfig->readConfigInt("GameTableHeightSave") <= myGameTableStyle->getMaximumWindowHeight().toInt() && myConfig->readConfigInt("GameTableHeightSave") >= myGameTableStyle->getMinimumWindowHeight().toInt() && myConfig->readConfigInt("GameTableWidthSave") <= myGameTableStyle->getMaximumWindowWidth().toInt() && myConfig->readConfigInt("GameTableWidthSave") >= myGameTableStyle->getMinimumWindowWidth().toInt()) {
 
-			this->resize(myConfig->readConfigInt("GameTableWidthSave"), myConfig->readConfigInt("GameTableHeightSave"));
-		}
+            this->resize(myConfig->readConfigInt("GameTableWidthSave"), myConfig->readConfigInt("GameTableHeightSave"));
+        }
 	}
 #ifdef ANDROID
 	if(getAndroidApiVersion() == 10) {
