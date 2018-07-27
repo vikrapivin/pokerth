@@ -4059,42 +4059,35 @@ void gameTableImpl::refreshCardsChance(GameState bero)
 
     //hook into this function to implement my chance calculator
     boost::shared_ptr<PlayerInterface> humanPlayer = myStartWindow->getSession()->getCurrentGame()->getSeatsList()->front();
-    if(humanPlayer->getMyActiveStatus() && humanPlayer->getMyAction() != PLAYER_ACTION_FOLD) {
-
-
+    if(humanPlayer->getMyActiveStatus() && humanPlayer->getMyAction() != PLAYER_ACTION_FOLD)
+    {
         PlayerList activePlayz = myStartWindow->getSession()->getCurrentGame()->getActivePlayerList();
         int numberOfPlayers = activePlayz->size();
 
-
-
         //use below to compute actual number of players
-        int nPlayersStillIn = numberOfPlayers;
+        int nPlayersStillIn = 0;
 
         PlayerListConstIterator it_c;
-
-        //ehh could rewrite it to count up and not use below, but too lazy
-        int holecardIterator = 0;
 
 
         int boardCards[5];
         myStartWindow->getSession()->getCurrentGame()->getCurrentHand()->getBoard()->getMyCards(boardCards);
 
-        int holeCards[2*nPlayersStillIn];
+        int holeCards[2*numberOfPlayers];
 
         for(it_c=activePlayz->begin(); it_c!=activePlayz->end(); ++it_c)
         {
             if((*it_c)->getMyAction() == PLAYER_ACTION_FOLD)
             {
-                //keeping this for debug for now. Later on just iterate over below instead of holecardIterator
-                nPlayersStillIn--;
             }
             else
             {
-                int * curPoint = holeCards + 2*holecardIterator;
+                int * curPoint = holeCards + 2*nPlayersStillIn;
                 (*it_c)->getMyCards(curPoint);
+                //uncomment to output cards on table in order to compare calculated odds with another odds calculator
                 //textEdit_putOdds->appendPlainText(QString::number(*curPoint));
                 //textEdit_putOdds->appendPlainText(QString::number(*(curPoint+1)));
-                holecardIterator++;
+                nPlayersStillIn++;
 
             }
         }
@@ -4115,15 +4108,10 @@ void gameTableImpl::refreshCardsChance(GameState bero)
 
 
         //below for debug
-        QString numberPlays = QString::number(myStartWindow->getSession()->getCurrentGame()->getActivePlayerList()->size());
         //    textEdit_putOdds->appendPlainText("\n");
         //    textEdit_putOdds->appendPlainText(QString::number(numberOfPlayers));
         //    textEdit_putOdds->appendPlainText(QString::number(nPlayersStillIn));
 
-        //textEdit_putOdds->appendPlainText("QStringnumber(holecardIterator)");
-        //textEdit_putOdds->appendPlainText(QString::number(holecardIterator));
-
-        //implement when it is false, i.e. when button was not pressed
     }
     else
     {
