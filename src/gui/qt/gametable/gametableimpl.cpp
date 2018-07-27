@@ -3520,6 +3520,7 @@ void gameTableImpl::localGameModification()
 
     //insert Odds Tab
     tabWidget_Left->insertTab(1, tab_odds, QString(tr("Odds")));
+    tab_odds->setStyleSheet("QObject {font: 8pt;}");
 #endif
 
 	int i;

@@ -3909,6 +3909,11 @@ p, li { white-space: pre-wrap; }
                  <height>101</height>
                 </rect>
                </property>
+               <property name="font">
+                <font>
+                 <pointsize>8</pointsize>
+                </font>
+               </property>
                <property name="focusPolicy">
                 <enum>Qt::ClickFocus</enum>
                </property>
@@ -3923,10 +3928,15 @@ p, li { white-space: pre-wrap; }
                <property name="geometry">
                 <rect>
                  <x>10</x>
-                 <y>105</y>
+                 <y>106</y>
                  <width>230</width>
-                 <height>20</height>
+                 <height>16</height>
                 </rect>
+               </property>
+               <property name="font">
+                <font>
+                 <pointsize>8</pointsize>
+                </font>
                </property>
                <property name="focusPolicy">
                 <enum>Qt::NoFocus</enum>
