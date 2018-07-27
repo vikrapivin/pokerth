@@ -53,8 +53,7 @@ public:
 
     // number of elements allocated as part of the first pointer is 2 times the integer
     static std::string calcOddsChance(GameState, int*, int, int*, bool);
-	//static int** showdown(GameState, int**, int);
-
+    //static int** showdown(GameState, int**, int);
 };
 
 #endif

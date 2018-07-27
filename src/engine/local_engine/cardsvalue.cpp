@@ -722,6 +722,12 @@ std::vector< std::vector<int> > CardsValue::calcCardsChance(GameState beRoID, in
 	return chance;
 }
 
+//from https://stackoverflow.com/questions/1640258/need-a-fast-random-generator-for-c
+//inline int CardsValue::fastrand() {
+//  g_seed = (214013*g_seed+2531011);
+//  return (g_seed>>16)&0x7FFF;
+//}
+
 //calculations will probably be off from experience because I do not consider cards of players who are out
 //may decide to do that later
 std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int numberPlayers, int* boardCards, bool realState)
@@ -730,7 +736,7 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
     std::string returnString = "";
 
     //probably should be a parameter to this function
-    int numberTrials = 7000;
+    int numberTrials = 15000;
 
     const int allCards[] = {
         0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
@@ -743,6 +749,8 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
 
     //put the possible cards here
     int cardsArraySubset[52];
+
+    unsigned int g_seed = time(NULL);
 
     switch(beRoID) {
     case GAME_STATE_PREFLOP: {
@@ -771,7 +779,8 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         allPosCards.resize(posCardsIt-allPosCards.begin());
 
         //probably less resource intensive to deal with a traditional array than a vector.
-        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+        //no need as different method of randomizing
+        //memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
 
         int boardSim[7];
         int winCount = 0;
@@ -779,10 +788,33 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         bool playerWinsSim = true;
         int playerCardVal = -1;
 
+
         for (int i = 0; i < numberTrials; i++)
         {
+            int numGenerated = 0;
 
-            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+            //pseudo random, real random not needed here
+            while (numGenerated < (5 + 2*(numberPlayers-1)) )
+            {
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
+                bool newNumbFound = true;
+                for (int ii = 0 ; ii < numGenerated; ii++)
+                {
+                    if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                    {
+                        newNumbFound = false;
+                        break;
+                    }
+                }
+                if(newNumbFound)
+                {
+                    cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                    numGenerated++;
+
+                }
+            }
 
             //hole cards
             boardSim[0] = playerCards[0];
@@ -841,7 +873,7 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
         allPosCards.resize(posCardsIt-allPosCards.begin());
 
-        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+//        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
 
         int boardSim[7];
         int winCount = 0;
@@ -857,7 +889,32 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         for (int i = 0; i < numberTrials; i++)
         {
 
-            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+            //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            int numGenerated = 0;
+
+            //pseudo random, real random not needed here
+            while (numGenerated < (2 + 2*(numberPlayers-1)) )
+            {
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
+                bool newNumbFound = true;
+                for (int ii = 0 ; ii < numGenerated; ii++)
+                {
+                    if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                    {
+                        newNumbFound = false;
+                        break;
+                    }
+                }
+                if(newNumbFound)
+                {
+                    cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                    numGenerated++;
+
+                }
+            }
 
             //hole cards
             boardSim[0] = playerCards[0];
@@ -874,9 +931,9 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
 
             for(int j = 0; j < numberPlayers-1; j++)
             {
-                //hard coded +3 for flop, +2 for used cards
-                boardSim[0] = cardsArraySubset[2*j+2+0+3];
-                boardSim[1] = cardsArraySubset[2*j+2+1+3];
+                //+2 for used cards
+                boardSim[0] = cardsArraySubset[2*j+2+0];
+                boardSim[1] = cardsArraySubset[2*j+2+1];
                 if(playerCardVal < cardsValue(boardSim,0))
                 {
                     playerWinsSim = false;
@@ -914,7 +971,7 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
         allPosCards.resize(posCardsIt-allPosCards.begin());
 
-        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+//        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
 
         int boardSim[7];
         int winCount = 0;
@@ -931,7 +988,29 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         for (int i = 0; i < numberTrials; i++)
         {
 
-            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+            //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+            int numGenerated = 0;
+            while (numGenerated < (1 + 2*(numberPlayers-1)) )
+            {
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
+                bool newNumbFound = true;
+                for (int ii = 0 ; ii < numGenerated; ii++)
+                {
+                    if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                    {
+                        newNumbFound = false;
+                        break;
+                    }
+                }
+                if(newNumbFound)
+                {
+                    cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                    numGenerated++;
+
+                }
+            }
 
             //hole cards
             boardSim[0] = playerCards[0];
@@ -946,9 +1025,9 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
 
             for(int j = 0; j < numberPlayers-1; j++)
             {
-                //hard coded +4 for turn, +1 for used cards
-                boardSim[0] = cardsArraySubset[2*j+1+0+4];
-                boardSim[1] = cardsArraySubset[2*j+1+1+4];
+                //+1 for used cards
+                boardSim[0] = cardsArraySubset[2*j+1+0];
+                boardSim[1] = cardsArraySubset[2*j+1+1];
                 if(playerCardVal < cardsValue(boardSim,0))
                 {
                     playerWinsSim = false;
@@ -987,7 +1066,7 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
         allPosCards.resize(posCardsIt-allPosCards.begin());
 
-        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+//        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
 
         int boardSim[7];
         int winCount = 0;
@@ -1012,15 +1091,37 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
         for (int i = 0; i < numberTrials; i++)
         {
 
-            Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+            //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+            int numGenerated = 0;
+            while (numGenerated < (0 + 2*(numberPlayers-1)) )
+            {
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
+                bool newNumbFound = true;
+                for (int ii = 0 ; ii < numGenerated; ii++)
+                {
+                    if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                    {
+                        newNumbFound = false;
+                        break;
+                    }
+                }
+                if(newNumbFound)
+                {
+                    cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                    numGenerated++;
+
+                }
+            }
 
             playerWinsSim = true;
 
             for(int j = 0; j < numberPlayers-1; j++)
             {
-                //hard coded +3 for flop
-                boardSim[0] = cardsArraySubset[2*j+5+5];
-                boardSim[1] = cardsArraySubset[2*j+6+5];
+                boardSim[0] = cardsArraySubset[2*j];
+                boardSim[1] = cardsArraySubset[2*j+1];
                 if(playerCardVal < cardsValue(boardSim,0))
                 {
                     playerWinsSim = false;
@@ -1065,7 +1166,7 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
 
             allPosCards.resize(posCardsIt-allPosCards.begin());
 
-            memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+            //memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
 
             int boardSim[7];
             int winCount = 0;
@@ -1076,7 +1177,30 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
             for (int i = 0; i < numberTrials; i++)
             {
 
-                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+                //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                int numGenerated = 0;
+                while (numGenerated < 5 )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
 
                 boardSim[0] = playerCards[0];
                 boardSim[1] = playerCards[1];
@@ -1151,7 +1275,30 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
             for (int i = 0; i < numberTrials; i++)
             {
 
-                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+                //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                int numGenerated = 0;
+                while (numGenerated < 2 )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
 
                 boardSim[0] = playerCards[0];
                 boardSim[1] = playerCards[1];
@@ -1224,13 +1371,16 @@ std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int n
             for (int i = 0; i < numberTrials; i++)
             {
 
-                Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+                //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
 
                 boardSim[0] = playerCards[0];
                 boardSim[1] = playerCards[1];
 
-
-                boardSim[6] = cardsArraySubset[0];
+                boardSim[6] = allPosCards[pseudoRand];
 
                 playerCardVal = cardsValue(boardSim,0);
 
