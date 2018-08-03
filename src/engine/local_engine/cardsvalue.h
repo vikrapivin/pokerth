@@ -52,6 +52,7 @@ public:
 	static std::vector< std::vector<int> > calcCardsChance(GameState, int*, int*);
 
     // number of elements allocated as part of the first pointer is 2 times the integer
+    static double calcOddsChanceRaw(GameState, int, int, int*, int*, int*, double*, int = 15000, bool = true);
     static std::string calcOddsChance(GameState, int*, int, int*, bool);
     //static int** showdown(GameState, int**, int);
 };

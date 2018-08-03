@@ -728,8 +728,870 @@ std::vector< std::vector<int> > CardsValue::calcCardsChance(GameState beRoID, in
 //  return (g_seed>>16)&0x7FFF;
 //}
 
+// CardsValue::calcOddsChanceRaw
+// @in GameState beRoID -- pokerth type
+// @in int playersTotal -- total number of players to whom cards were dealt
+// @in int numberPlayers -- number of non-folded players
+// @in int* playersIn -- int array indicating player number of players not folded. ie. first element is the number of the first player not folded, etc.
+// @in int* playerCards -- int array of all cards of all players. playerCards[0] should correspond to the first player, playerCards[1] the 2nd and so on...
+// @in int* boardCards -- cards on the board. The use of this parameter depends on beRoID. If preflop, this can be null,
+// @in boardCards -- on flop this must have at least 3 elements, 4 on the turn and 5 on the river
+// @out double* winChances, winning chances for each of the non-folded players. same order as in playersIn
+// @out double* winChances, if realState is false the chance of player 0 winning is returned (so only winChances[0] is modified
+// @out double* winChances, note: a draw is included in the winning chance as well as the player is one of the "winners"
+// @in numberTrials -- since this is a Monte Carlo simulation, indicate the number of trials to do
+// @in realState -- if true then all cards in playerCards are considered, if false, only cards known to player 0.
+// returns chance of any draw
+// returns -1.0 on generic error. Error most likely due to invalid GameState
+// returns -2.0 if winChances is null
+double CardsValue::calcOddsChanceRaw(GameState beRoID, int playersTotal, int numberPlayers, int* playersIn, int* playerCards, int* boardCards, double* winChances, int numberTrials, bool realState)
+{
+    const int allCards[] = {
+        0,  1,  2,  3,  4,  5,  6,  7,  8,  9,
+        10, 11, 12, 13, 14, 15, 16, 17, 18, 19,
+        20, 21, 22, 23, 24, 25, 26, 27, 28, 29,
+        30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+        40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
+        50, 51
+    };
+
+    //put the possible cards here eventually
+    int cardsArraySubset[52];
+    //initialize random seed
+    unsigned int g_seed = time(NULL);
+    if(winChances == NULL)
+    {
+        return -2.0;
+    }
+
+    int drawCount = 0;
+
+    if (realState == true)
+    {
+        switch(beRoID) {
+        case GAME_STATE_PREFLOP: {
+
+            const int numberOfKnownCards = 2*playersTotal;
+
+            int cardsSorted[numberOfKnownCards];
+
+            for(int i =0; i< numberOfKnownCards; i++)
+            {
+                cardsSorted[i ] = playerCards[i];
+            }
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+
+            int winCount[numberPlayers] = {0};
+            int currentCardVal[numberPlayers];
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+                int numGenerated = 0;
+                while (numGenerated < 5 )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                boardSim[2] = cardsArraySubset[0];
+                boardSim[3] = cardsArraySubset[1];
+                boardSim[4] = cardsArraySubset[2];
+                boardSim[5] = cardsArraySubset[3];
+                boardSim[6] = cardsArraySubset[4];
+
+                for(int j = 0; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*playersIn[j]];
+                    boardSim[1] = playerCards[2*playersIn[j]+1];
+                    currentCardVal[j] = cardsValue(boardSim, 0);
+                }
+
+                int maxVal = 0;
+                bool possibleTie = false;
+                bool tiedPlayers[10] = {false};
+                for (int j = 1; j < numberPlayers; j++)
+                {
+                    if (currentCardVal[j] > currentCardVal[maxVal])
+                    {
+                        if (possibleTie == true)
+                        {
+                            possibleTie = false;
+                            for(int jj = 0; jj < j; jj++)
+                            {
+                                tiedPlayers[jj]=false;
+                            }
+                        }
+                        maxVal = j;
+                    }
+                    else if (currentCardVal[j] == currentCardVal[maxVal])
+                    {
+                        // see if there is a tie or if another player has a better hand
+                        possibleTie = true;
+                        tiedPlayers[maxVal]= true;
+                        tiedPlayers[j] = true;
+                    }
+                }
+                if(possibleTie == false)
+                {
+                    winCount[maxVal]++;
+                }
+                else
+                {
+                    for(int jj = 0; jj < numberPlayers; jj++)
+                    {
+                        if(tiedPlayers[jj]==true)
+                        {
+                            winCount[jj]++;
+                        }
+                    }
+                    drawCount++;
+                }
+            }
+
+            for (int i = 0; i < numberPlayers; i++)
+            {
+                winChances[i] = (1.0*winCount[i])/numberTrials;
+            }
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_FLOP: {
+
+            const int numberOfKnownCards = 2*playersTotal+3;
+
+            int cardsSorted[numberOfKnownCards];
+
+            cardsSorted[0] = boardCards[0];
+            cardsSorted[1] = boardCards[1];
+            cardsSorted[2] = boardCards[2];
+
+            for(int i = 3; i < numberOfKnownCards; i++)
+            {
+                cardsSorted[i] = playerCards[i-3];
+            }
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+
+
+            int winCount[numberPlayers] = {0};
+            int currentCardVal[numberPlayers];
+
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                int numGenerated = 0;
+                while (numGenerated < 2 )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                boardSim[5] = cardsArraySubset[0];
+                boardSim[6] = cardsArraySubset[1];
+
+                for(int j = 0; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*playersIn[j]];
+                    boardSim[1] = playerCards[2*playersIn[j]+1];
+                    currentCardVal[j] = cardsValue(boardSim, 0);
+                }
+
+                int maxVal = 0;
+                bool possibleTie = false;
+                bool tiedPlayers[10] = {false};
+                for (int j = 1; j < numberPlayers; j++)
+                {
+                    if (currentCardVal[j] > currentCardVal[maxVal])
+                    {
+                        if (possibleTie == true)
+                        {
+                            possibleTie = false;
+                            for(int jj = 0; jj < j; jj++)
+                            {
+                                tiedPlayers[jj]=false;
+                            }
+                        }
+                        maxVal = j;
+                    }
+                    else if (currentCardVal[j] == currentCardVal[maxVal])
+                    {
+                        // see if there is a tie or if another player has a better hand
+                        possibleTie = true;
+                        tiedPlayers[maxVal]= true;
+                        tiedPlayers[j] = true;
+                    }
+                }
+                if(possibleTie == false)
+                {
+                    winCount[maxVal]++;
+                }
+                else
+                {
+                    for(int jj = 0; jj < numberPlayers; jj++)
+                    {
+                        if(tiedPlayers[jj]==true)
+                        {
+                            winCount[jj]++;
+                        }
+                    }
+                    drawCount++;
+                }
+            }
+
+            for (int i = 0; i < numberPlayers; i++)
+            {
+                winChances[i] = (1.0*winCount[i])/numberTrials;
+            }
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_TURN: {
+
+            const int numberOfKnownCards = 2*playersTotal+4;
+
+            int cardsSorted[numberOfKnownCards];
+
+            cardsSorted[0] = boardCards[0];
+            cardsSorted[1] = boardCards[1];
+            cardsSorted[2] = boardCards[2];
+            cardsSorted[3] = boardCards[3];
+
+            for(int i = 4; i < numberOfKnownCards; i++)
+            {
+                cardsSorted[i] = playerCards[i-4];
+            }
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+
+
+            int winCount[numberPlayers] = {0};
+            int currentCardVal[numberPlayers];
+
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                g_seed = (214013*g_seed+2531011);
+                int pseudoRand = (g_seed>>16)&0x7FFF;
+                pseudoRand = pseudoRand % allPosCards.size();
+
+                boardSim[6] = allPosCards[pseudoRand];
+
+                for(int j = 0; j < numberPlayers; j++)
+                {
+                    boardSim[0] = playerCards[2*playersIn[j]];
+                    boardSim[1] = playerCards[2*playersIn[j]+1];
+                    currentCardVal[j] = cardsValue(boardSim, 0);
+                }
+
+                int maxVal = 0;
+                bool possibleTie = false;
+                bool tiedPlayers[10] = {false};
+                for (int j = 1; j < numberPlayers; j++)
+                {
+                    if (currentCardVal[j] > currentCardVal[maxVal])
+                    {
+                        if (possibleTie == true)
+                        {
+                            possibleTie = false;
+                            for(int jj = 0; jj < j; jj++)
+                            {
+                                tiedPlayers[jj]=false;
+                            }
+                        }
+                        maxVal = j;
+                    }
+                    else if (currentCardVal[j] == currentCardVal[maxVal])
+                    {
+                        // see if there is a tie or if another player has a better hand
+                        possibleTie = true;
+                        tiedPlayers[maxVal]= true;
+                        tiedPlayers[j] = true;
+                    }
+                }
+                if(possibleTie == false)
+                {
+                    winCount[maxVal]++;
+                }
+                else
+                {
+                    for(int jj = 0; jj < numberPlayers; jj++)
+                    {
+                        if(tiedPlayers[jj]==true)
+                        {
+                            winCount[jj]++;
+                        }
+                    }
+                    drawCount++;
+                }
+            }
+
+            for (int i = 0; i < numberPlayers; i++)
+            {
+                winChances[i] = (1.0*winCount[i])/numberTrials;
+            }
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_RIVER: {
+
+
+            int winCount[numberPlayers] = {false};
+            int currentCardVal[numberPlayers];
+
+            int boardSim[7];
+
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+            boardSim[6] = boardCards[4];
+
+            for(int j = 0; j < numberPlayers; j++)
+            {
+                boardSim[0] = playerCards[2*playersIn[j]];
+                boardSim[1] = playerCards[2*playersIn[j]+1];
+                currentCardVal[j] = cardsValue(boardSim, 0);
+            }
+
+            int maxVal = 0;
+            bool possibleTie = false;
+            bool tiedPlayers[10] = {false};
+
+            for (int j = 1; j < numberPlayers; j++)
+            {
+                if (currentCardVal[j] > currentCardVal[maxVal])
+                {
+                    if (possibleTie == true)
+                    {
+                        possibleTie = false;
+                        for(int jj = 0; jj < j; jj++)
+                        {
+                            tiedPlayers[jj]=false;
+                        }
+                    }
+                    maxVal = j;
+                }
+                else if (currentCardVal[j] == currentCardVal[maxVal])
+                {
+                    // see if there is a tie or if another player has a better hand
+                    possibleTie = true;
+                    tiedPlayers[maxVal]= true;
+                    tiedPlayers[j] = true;
+                }
+            }
+            if(possibleTie == false)
+            {
+                winCount[maxVal]++;
+            }
+            else
+            {
+                for(int jj = 0; jj < numberPlayers; jj++)
+                {
+                    if(tiedPlayers[jj]==true)
+                    {
+                        winCount[jj]++;
+                    }
+                }
+                drawCount++;
+            }
+            for (int i = 0; i < numberPlayers; i++)
+            {
+                winChances[i] = (1.0*winCount[i]);
+            }
+            return ((1.0*drawCount));
+        }
+            break;
+        default: {
+        }
+        }
+    }
+    else
+    {
+        switch(beRoID) {
+        case GAME_STATE_PREFLOP: {
+
+            const int numberOfKnownCards = 2;
+
+            int cardsSorted[numberOfKnownCards];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52, -1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+            int winCount = 0;
+            int drawCount = 0;
+
+            bool playerWinsSim = true;
+            int playerCardVal = -1;
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+                int numGenerated = 0;
+
+                //pseudo random, real random not needed here
+                while (numGenerated < (5 + 2*(numberPlayers-1)) )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                //hole cards
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+
+                // simulated board cards
+                boardSim[2] = cardsArraySubset[0];
+                boardSim[3] = cardsArraySubset[1];
+                boardSim[4] = cardsArraySubset[2];
+                boardSim[5] = cardsArraySubset[3];
+                boardSim[6] = cardsArraySubset[4];
+
+                playerCardVal = cardsValue(boardSim,0);
+                playerWinsSim = true;
+
+                bool possibleTie = false;
+
+                for(int j = 0; j < numberPlayers-1; j++)
+                {
+                    //deal cards to other players
+                    boardSim[0] = cardsArraySubset[2*j+5];
+                    boardSim[1] = cardsArraySubset[2*j+6];
+                    int testVal = cardsValue(boardSim,0);
+                    if(playerCardVal < testVal)
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                    else if (playerCardVal == testVal)
+                    {
+                        possibleTie = true;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                    if (possibleTie == true)
+                    {
+                        drawCount++;
+                    }
+                }
+            }
+            winChances[0] = (1.0*winCount)/numberTrials;
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_FLOP: {
+
+
+            const int numberOfKnownCards = 5;
+
+            int cardsSorted[numberOfKnownCards];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+            int winCount = 0;
+            int drawCount = 0;
+
+            bool playerWinsSim = true;
+            int playerCardVal = -1;
+
+            //known flop
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+
+                int numGenerated = 0;
+
+                //pseudo random, real random not needed here
+                while (numGenerated < (2 + 2*(numberPlayers-1)) )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                //hole cards
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+
+
+                //simulated cards
+                boardSim[5] = cardsArraySubset[0];
+                boardSim[6] = cardsArraySubset[1];
+
+                playerCardVal = cardsValue(boardSim,0);
+                playerWinsSim = true;
+                bool possibleTie = false;
+
+                for(int j = 0; j < numberPlayers-1; j++)
+                {
+                    boardSim[0] = cardsArraySubset[2*j+2+0];
+                    boardSim[1] = cardsArraySubset[2*j+2+1];
+                    int testVal = cardsValue(boardSim,0);
+                    if(playerCardVal < testVal)
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                    else if (playerCardVal == testVal)
+                    {
+                        possibleTie = true;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                    if (possibleTie == true)
+                    {
+                        drawCount++;
+                    }
+                }
+            }
+            winChances[0] = (1.0*winCount)/numberTrials;
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_TURN: {
+
+            //keep track more easily for each case
+            const int numberOfKnownCards = 6;
+
+            int cardsSorted[numberOfKnownCards];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+            cardsSorted[5] = boardCards[3];
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            //        memcpy((char *) cardsArraySubset,(char *) &allPosCards[0], sizeof(int)*allPosCards.size());
+
+            int boardSim[7];
+            int winCount = 0;
+            int drawCount = 0;
+
+            bool playerWinsSim = true;
+            int playerCardVal = -1;
+
+            //known board
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                //Tools::ShuffleArrayNonDeterministic(cardsArraySubset, allPosCards.size());
+                int numGenerated = 0;
+                while (numGenerated < (1 + 2*(numberPlayers-1)) )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                //hole cards
+                boardSim[0] = playerCards[0];
+                boardSim[1] = playerCards[1];
+
+
+                //simulated card
+                boardSim[6] = cardsArraySubset[0];
+
+                playerCardVal = cardsValue(boardSim,0);
+                playerWinsSim = true;
+                bool possibleTie = false;
+
+                for(int j = 0; j < numberPlayers-1; j++)
+                {
+                    boardSim[0] = cardsArraySubset[2*j+1+0];
+                    boardSim[1] = cardsArraySubset[2*j+1+1];
+                    int testVal = cardsValue(boardSim,0);
+                    if(playerCardVal < testVal)
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                    else if (playerCardVal == testVal)
+                    {
+                        possibleTie = true;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                    if (possibleTie == true)
+                    {
+                        drawCount++;
+                    }
+                }
+            }
+            winChances[0] = (1.0*winCount)/numberTrials;
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        case GAME_STATE_RIVER: {
+
+            const int numberOfKnownCards = 7;
+
+            int cardsSorted[numberOfKnownCards];
+            cardsSorted[0] = playerCards[0];
+            cardsSorted[1] = playerCards[1];
+            cardsSorted[2] = boardCards[0];
+            cardsSorted[3] = boardCards[1];
+            cardsSorted[4] = boardCards[2];
+            cardsSorted[5] = boardCards[3];
+            cardsSorted[6] = boardCards[4];
+
+            std::sort (cardsSorted, cardsSorted+numberOfKnownCards);
+
+            std::vector<int> allPosCards(52,-1);
+            std::vector<int>::iterator posCardsIt;
+
+            posCardsIt = std::set_difference (allCards, allCards + 52, cardsSorted, cardsSorted+numberOfKnownCards, allPosCards.begin() );
+            allPosCards.resize(posCardsIt-allPosCards.begin());
+
+            int boardSim[7];
+            int winCount = 0;
+            int drawCount = 0;
+
+            bool playerWinsSim = true;
+            int playerCardVal = -1;
+
+            //hole cards
+            boardSim[0] = playerCards[0];
+            boardSim[1] = playerCards[1];
+
+            //known cards
+            boardSim[2] = boardCards[0];
+            boardSim[3] = boardCards[1];
+            boardSim[4] = boardCards[2];
+            boardSim[5] = boardCards[3];
+            boardSim[6] = boardCards[4];
+
+            //computed outside of loop because there is no need to recompute for each loop as all cards are known
+            playerCardVal = cardsValue(boardSim,0);
+
+            for (int i = 0; i < numberTrials; i++)
+            {
+
+                int numGenerated = 0;
+                while (numGenerated < (0 + 2*(numberPlayers-1)) )
+                {
+                    g_seed = (214013*g_seed+2531011);
+                    int pseudoRand = (g_seed>>16)&0x7FFF;
+                    pseudoRand = pseudoRand % allPosCards.size();
+                    bool newNumbFound = true;
+                    for (int ii = 0 ; ii < numGenerated; ii++)
+                    {
+                        if(allPosCards[pseudoRand] == cardsArraySubset[ii])
+                        {
+                            newNumbFound = false;
+                            break;
+                        }
+                    }
+                    if(newNumbFound)
+                    {
+                        cardsArraySubset[numGenerated] = allPosCards[pseudoRand];
+                        numGenerated++;
+
+                    }
+                }
+
+                playerWinsSim = true;
+                bool possibleTie = false;
+
+                for(int j = 0; j < numberPlayers-1; j++)
+                {
+                    boardSim[0] = cardsArraySubset[2*j];
+                    boardSim[1] = cardsArraySubset[2*j+1];
+                    int testVal = cardsValue(boardSim,0);
+                    if(playerCardVal < testVal)
+                    {
+                        playerWinsSim = false;
+                        break;
+                    }
+                    else if (playerCardVal == testVal)
+                    {
+                        possibleTie = true;
+                    }
+                }
+                if (playerWinsSim == true)
+                {
+                    winCount++;
+                    if (possibleTie == true)
+                    {
+                        drawCount++;
+                    }
+                }
+            }
+            winChances[0] = (1.0*winCount)/numberTrials;
+            return ((1.0*drawCount)/numberTrials);
+        }
+            break;
+        default: {
+        }
+        }
+    }
+    return -1.0;
+}
+
 //calculations will probably be off from experience because I do not consider cards of players who are out
-//may decide to do that later
+// the Raw method does consider it
+// playerCards -- int array of all cards of all non-folded players. playerCards[0] should correspond to the first player, playerCards[1] the 2nd and so on...
+// numberPlayers -- number of non-folded players
+// boardCards -- cards on the board. The use of this parameter depends on beRoID. If preflop, this can be null,
+// boardCards -- on flop this must have at least 3 elements, 4 on the turn and 5 on the river
+// numberTrials -- since this is a Monte Carlo simulation, indicate the number of trials to do
+// realState -- if true then all cards in playerCards are not used in simulated deals and instead
 std::string CardsValue::calcOddsChance(GameState beRoID, int* playerCards, int numberPlayers, int* boardCards, bool realState)
 {
 

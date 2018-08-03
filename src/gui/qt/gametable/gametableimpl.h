@@ -452,6 +452,7 @@ private:
 	MyCardsPixmapLabel *holeCardsArray[MAX_NUMBER_OF_PLAYERS][2];
 
 	QLabel *playerTipLabelArray[MAX_NUMBER_OF_PLAYERS];
+    QLabel *showdownPercentLabelArray[MAX_NUMBER_OF_PLAYERS];
 	QPixmap flipside;
 	QLabel *spectatorIcon;
 	QLabel *spectatorNumberLabel;

@@ -324,6 +324,17 @@ gameTableImpl::gameTableImpl(ConfigFile *c, QMainWindow *parent)
 	playerTipLabelArray[8] = label_playerTip8;
 	playerTipLabelArray[9] = label_playerTip9;
 
+    showdownPercentLabelArray[0] = textLabel_showDownStat0;
+    showdownPercentLabelArray[1] = textLabel_showDownStat1;
+    showdownPercentLabelArray[2] = textLabel_showDownStat2;
+    showdownPercentLabelArray[3] = textLabel_showDownStat3;
+    showdownPercentLabelArray[4] = textLabel_showDownStat4;
+    showdownPercentLabelArray[5] = textLabel_showDownStat5;
+    showdownPercentLabelArray[6] = textLabel_showDownStat6;
+    showdownPercentLabelArray[7] = textLabel_showDownStat7;
+    showdownPercentLabelArray[8] = textLabel_showDownStat8;
+    showdownPercentLabelArray[9] = textLabel_showDownStat9;
+
 #ifdef GUI_800x480
 	int j;
 	for (i=0; i<MAX_NUMBER_OF_PLAYERS; ++i) {
@@ -4075,11 +4086,16 @@ void gameTableImpl::refreshCardsChance(GameState bero)
         myStartWindow->getSession()->getCurrentGame()->getCurrentHand()->getBoard()->getMyCards(boardCards);
 
         int holeCards[2*numberOfPlayers];
+        int playersStillInArr[numberOfPlayers];
+        int currPlayNumb = 0;
+        int allCards[2*numberOfPlayers];
+        int playerOrderToIdTranslator[10];
 
         for(it_c=activePlayz->begin(); it_c!=activePlayz->end(); ++it_c)
         {
             if((*it_c)->getMyAction() == PLAYER_ACTION_FOLD)
             {
+                showdownPercentLabelArray[(*it_c)->getMyID()]->setText("");
             }
             else
             {
@@ -4088,8 +4104,13 @@ void gameTableImpl::refreshCardsChance(GameState bero)
                 //uncomment to output cards on table in order to compare calculated odds with another odds calculator
                 //textEdit_putOdds->appendPlainText(QString::number(*curPoint));
                 //textEdit_putOdds->appendPlainText(QString::number(*(curPoint+1)));
+                playersStillInArr[nPlayersStillIn] = currPlayNumb;
+                playerOrderToIdTranslator[nPlayersStillIn] = (*it_c)->getMyID();
                 nPlayersStillIn++;
             }
+            int* currPoint = allCards+2*currPlayNumb;
+            (*it_c)->getMyCards(currPoint);
+            currPlayNumb++;
         }
 
         if(myConfig->readConfigInt("ShowRealChance")) {
@@ -4106,6 +4127,24 @@ void gameTableImpl::refreshCardsChance(GameState bero)
             textEdit_putOdds->appendPlainText(oddsText);
         }
 
+        boost::shared_ptr<PlayerInterface> humanPlayer = myStartWindow->getSession()->getCurrentGame()->getSeatsList()->front();
+
+        if(flipHolecardsAllInAlreadyDone == true)
+        {
+            double winChances[numberOfPlayers];
+            CardsValue::calcOddsChanceRaw(bero, numberOfPlayers, nPlayersStillIn, playersStillInArr, allCards, boardCards, winChances, 15000, true);
+
+            for(int i = 0; i< nPlayersStillIn; i++)
+            {
+                std::ostringstream streamObj;
+                streamObj << std::fixed;
+                streamObj << std::setprecision(0);
+                streamObj << winChances[i]*100.0 << "%";
+                QString chanceText0 = streamObj.str().c_str();
+                showdownPercentLabelArray[playerOrderToIdTranslator[i]]->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+                showdownPercentLabelArray[playerOrderToIdTranslator[i]]->setText(chanceText0);
+            }
+        }
 
         //below for debug
         //    textEdit_putOdds->appendPlainText("\n");
