@@ -4127,8 +4127,6 @@ void gameTableImpl::refreshCardsChance(GameState bero)
             textEdit_putOdds->appendPlainText(oddsText);
         }
 
-        boost::shared_ptr<PlayerInterface> humanPlayer = myStartWindow->getSession()->getCurrentGame()->getSeatsList()->front();
-
         if(flipHolecardsAllInAlreadyDone == true)
         {
             double winChances[numberOfPlayers];
@@ -4156,6 +4154,63 @@ void gameTableImpl::refreshCardsChance(GameState bero)
     {
         textEdit_putOdds->clear();
         textEdit_putOdds->appendPlainText("player is out");
+        if (flipHolecardsAllInAlreadyDone == true)
+        {
+            PlayerList activePlayz = myStartWindow->getSession()->getCurrentGame()->getActivePlayerList();
+            int numberOfPlayers = activePlayz->size();
+
+            //use below to compute actual number of players
+            int nPlayersStillIn = 0;
+
+            PlayerListConstIterator it_c;
+
+
+            int boardCards[5];
+            myStartWindow->getSession()->getCurrentGame()->getCurrentHand()->getBoard()->getMyCards(boardCards);
+
+            int holeCards[2*numberOfPlayers];
+            int playersStillInArr[numberOfPlayers];
+            int currPlayNumb = 0;
+            int allCards[2*numberOfPlayers];
+            int playerOrderToIdTranslator[10];
+
+            for(it_c=activePlayz->begin(); it_c!=activePlayz->end(); ++it_c)
+            {
+                if((*it_c)->getMyAction() == PLAYER_ACTION_FOLD)
+                {
+                    showdownPercentLabelArray[(*it_c)->getMyID()]->setText("");
+                }
+                else
+                {
+                    int * curPoint = holeCards + 2*nPlayersStillIn;
+                    (*it_c)->getMyCards(curPoint);
+                    //uncomment to output cards on table in order to compare calculated odds with another odds calculator
+                    //textEdit_putOdds->appendPlainText(QString::number(*curPoint));
+                    //textEdit_putOdds->appendPlainText(QString::number(*(curPoint+1)));
+                    playersStillInArr[nPlayersStillIn] = currPlayNumb;
+                    playerOrderToIdTranslator[nPlayersStillIn] = (*it_c)->getMyID();
+                    nPlayersStillIn++;
+                }
+                int* currPoint = allCards+2*currPlayNumb;
+                (*it_c)->getMyCards(currPoint);
+                currPlayNumb++;
+            }
+
+            double winChances[numberOfPlayers];
+            CardsValue::calcOddsChanceRaw(bero, numberOfPlayers, nPlayersStillIn, playersStillInArr, allCards, boardCards, winChances, 15000, true);
+
+            for(int i = 0; i< nPlayersStillIn; i++)
+            {
+                std::ostringstream streamObj;
+                streamObj << std::fixed;
+                streamObj << std::setprecision(0);
+                streamObj << winChances[i]*100.0 << "%";
+                QString chanceText0 = streamObj.str().c_str();
+                showdownPercentLabelArray[playerOrderToIdTranslator[i]]->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+                showdownPercentLabelArray[playerOrderToIdTranslator[i]]->setText(chanceText0);
+            }
+        }
+
     }
 }
 
